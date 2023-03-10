@@ -40,6 +40,8 @@ def natural_keys(text):
     
     return [atoi(c) for c in re.split(r'(\d+)', text)]
 
+# Data
+
 data_path = "data/tfrecords"
 tfrecords = sorted(glob(f"{data_path}/*.tfrec"), key=natural_keys)
 
@@ -62,13 +64,8 @@ def parse_tfrecord_fn(example):
     return tf.io.parse_single_example(example, feature_description)
 
 
-# Data
-
-NUM_FRAMES = configs.num_frames
-
-
 def true_fn(frames, n_frames):
-    num_left_frames = NUM_FRAMES - n_frames
+    num_left_frames = configs.num_frames - n_frames
     left_frames = tf.zeros(shape=(num_left_frames, 543, 3))
     frames = tf.concat([frames, left_frames], 0)
 
@@ -79,7 +76,7 @@ def false_fn(frames):
     frames = tf.slice(
         frames,
         begin=[0,0,0],
-        size=[NUM_FRAMES, 543, 3]
+        size=[configs.num_frames, 543, 3]
     )
 
     return frames
@@ -93,7 +90,7 @@ def preprocess_frames(frames, n_frames):
     
     # sample frames
     frames = tf.cond(
-        tf.less(n_frames, NUM_FRAMES),
+        tf.less(n_frames, configs.num_frames),
         true_fn = lambda: true_fn(frames, n_frames),
         false_fn = lambda: false_fn(frames),
     )
@@ -153,7 +150,7 @@ LIP = [
 
 
 def get_model():
-    inputs = tf.keras.Input((NUM_FRAMES, 543, 3), dtype=tf.float32)
+    inputs = tf.keras.Input((configs.num_frames, 543, 3), dtype=tf.float32)
 
     # Features
     lip_inputs = tf.gather(inputs, indices=LIP, axis=2)

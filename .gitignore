@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Don't upload model weights
+models/
+
+# Don't upload data
+data/
+
+# W&B
+wandb/

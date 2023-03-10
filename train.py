@@ -20,7 +20,7 @@ print('Experiment Id: ', random_id)
 
 
 configs = Namespace(
-    num_frames = 32,
+    num_frames = 16,
     batch_size = 128,
     experiment_id = random_id,
     epochs = 20,
@@ -81,7 +81,7 @@ def false_fn(frames):
         begin=[0,0,0],
         size=[NUM_FRAMES, 543, 3]
     )
-    
+
     return frames
 
 
@@ -144,25 +144,31 @@ def conv1d_lstm_block(inputs, filters):
     return vector
 
 
+LIP = [
+    61, 185, 40, 39, 37, 0, 267, 269, 270, 409,
+    291, 146, 91, 181, 84, 17, 314, 405, 321, 375,
+    78, 191, 80, 81, 82, 13, 312, 311, 310, 415,
+    95, 88, 178, 87, 14, 317, 402, 318, 324, 308,
+]
+
+
 def get_model():
     inputs = tf.keras.Input((NUM_FRAMES, 543, 3), dtype=tf.float32)
 
     # Features
-    face_inputs = inputs[:, :, 0:468, :]
+    lip_inputs = tf.gather(inputs, indices=LIP, axis=2)
     left_hand_inputs = inputs[:, :, 468:489, :]
-    pose_inputs = inputs[:, :, 489:522, :]
     right_hand_inputs = inputs[:, :,522:,:]
 
-    face_vector = conv1d_lstm_block(face_inputs, [32, 64])
+    lip_vector = conv1d_lstm_block(lip_inputs, [32, 64])
     left_hand_vector = conv1d_lstm_block(left_hand_inputs, [64])
     right_hand_vector = conv1d_lstm_block(right_hand_inputs, [64])
-    pose_vector = conv1d_lstm_block(pose_inputs, [64])
     
-    vector = tf.keras.layers.Concatenate(axis=1)([face_vector, left_hand_vector, right_hand_vector, pose_vector])
+    vector = tf.keras.layers.Concatenate(axis=1)([lip_vector, left_hand_vector, right_hand_vector])
     vector = tf.keras.layers.Flatten()(vector)
     output = tf.keras.layers.Dense(250, activation="softmax")(vector)
     model = tf.keras.Model(inputs=inputs, outputs=output)
-    
+
     return model
 
 model = get_model()

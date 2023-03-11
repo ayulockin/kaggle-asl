@@ -21,7 +21,7 @@ import tflite_runtime.interpreter as tflite
 
 root_dir = "data/"
 data_path = root_dir + "train.csv"
-model_path = "models/baseline-YX3YLRKM"
+model_path = "models/run_bi6im2uq_model:v17-IOE4W2QE"
 
 
 def get_random_id(model_path):
@@ -54,6 +54,7 @@ def load_relevant_data_subset(pq_path):
 
 configs = Namespace(
     num_frames = 16,
+    resizing_interpolation="nearest",
 )
 
 NUM_FRAMES = configs.num_frames
@@ -106,10 +107,13 @@ class DataPreprocessing(tf.Module):
         frames = tf.where(tf.math.is_nan(frames), 0.0, frames)
 
         # sample frames
-        frames = tf.cond(
-            tf.less(n_frames, NUM_FRAMES),
-            true_fn = lambda: self.true_fn(frames, n_frames),
-            false_fn = lambda: self.false_fn(frames),
+        # frames = tf.cond(
+        #     tf.less(n_frames, NUM_FRAMES),
+        #     true_fn = lambda: self.true_fn(frames, n_frames),
+        #     false_fn = lambda: self.false_fn(frames),
+        # )
+        frames = tf.image.resize(
+            frames, (self.num_frames, 543), method=configs.resizing_interpolation
         )
 
         return tf.expand_dims(frames, axis=0)

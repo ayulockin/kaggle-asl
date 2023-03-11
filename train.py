@@ -12,6 +12,8 @@ import wandb
 from wandb.keras import WandbMetricsLogger
 
 from asl.utils import id_generator, natural_keys
+from asl.data import InterpolateDataloader
+from asl.model import SeparateConvLSTMModel
 
 
 random_id = id_generator(size=8)
@@ -41,194 +43,30 @@ tfrecords = sorted(glob(f"{data_path}/*.tfrec"), key=natural_keys)
 
 train_tfrecords, valid_tfrecords = tfrecords[:19], tfrecords[19:]
 
-
-def parse_sequence(serialized_sequence):
-    """
-    Decode the serialized frames.
-    """
-    return tf.io.parse_tensor(
-        serialized_sequence,
-        out_type=tf.float32,
-    )
+dataloader = InterpolateDataloader(configs)
+trainloader = dataloader.get_dataloader(train_tfrecords)
+validloader = dataloader.get_dataloader(valid_tfrecords, dataloader="valid")
 
 
-def parse_tfrecord_fn(example):
-    """
-    Parse TFRecord.
-    """
-    feature_description = {
-        "n_frames": tf.io.FixedLenFeature([], tf.float32),
-        "frames": tf.io.FixedLenFeature([], tf.string),
-        "label": tf.io.FixedLenFeature([], tf.int64),
-    }
+tf.keras.backend.clear_session()
+model = SeparateConvLSTMModel(configs).get_model()
+model.summary()
 
-    return tf.io.parse_single_example(example, feature_description)
+total_steps = 585*configs.epochs
+decay_steps = total_steps*configs.num_steps
 
-
-def true_fn(frames, n_frames):
-    """
-    If the number of frames is less than `configs.num_frames`, pad with zeroes.
-    """
-    num_left_frames = configs.num_frames - n_frames
-    left_frames = tf.zeros(shape=(num_left_frames, 543, 3))
-    frames = tf.concat([frames, left_frames], 0)
-
-    return frames
-
-
-def false_fn(frames):
-    """
-    If the number of frames is more than `configs.num_frames`, slice.
-    """
-    frames = tf.slice(frames, begin=[0, 0, 0], size=[configs.num_frames, 543, 3])
-
-    return frames
-
-
-# @tf.function
-# def preprocess_frames(frames, n_frames):
-#     """
-#     In this preprocessing function:
-#     - Fill NaN values to 0.
-#     - Pad or slice to a fixed numbers of `configs.num_frames`.
-#     """
-#     frames = tf.where(tf.math.is_nan(frames), 0.0, frames)
-
-#     frames = tf.cond(
-#         tf.less(n_frames, configs.num_frames),
-#         true_fn = lambda: true_fn(frames, n_frames),
-#         false_fn = lambda: false_fn(frames),
-#     )
-
-#     return frames
-
-
-@tf.function
-def preprocess_frames(frames):
-    """
-    In this preprocessing function:
-    - Fill NaN values to 0.
-    - Use `tf.image.resize` to interpolate.
-    """
-    frames = tf.where(tf.math.is_nan(frames), 0.0, frames)
-    frames = tf.image.resize(
-        frames, (configs.num_frames, 543), method=configs.resizing_interpolation
-    )
-
-    return frames
-
-
-def parse_data(example):
-    # Parse Frames
-    n_frames = example["n_frames"]
-    frames = tf.reshape(parse_sequence(example["frames"]), shape=(n_frames, 543, 3))
-    frames = preprocess_frames(frames)
-
-    # Parse Labels
-    label = tf.one_hot(example["label"], depth=250)
-
-    return frames, label
-
-
-AUTOTUNE = tf.data.AUTOTUNE
-
-train_ds = tf.data.TFRecordDataset(train_tfrecords)
-valid_ds = tf.data.TFRecordDataset(valid_tfrecords)
-
-trainloader = (
-    train_ds.map(parse_tfrecord_fn, num_parallel_calls=AUTOTUNE)
-    .shuffle(1024)
-    .map(parse_data, num_parallel_calls=AUTOTUNE)
-    .batch(configs.batch_size)
-    .prefetch(AUTOTUNE)
+cosine_decay_scheduler = tf.keras.optimizers.schedules.CosineDecay(
+    initial_learning_rate = configs.learning_rate,
+    decay_steps = decay_steps,
+    alpha=0.1
 )
 
-validloader = (
-    valid_ds.map(parse_tfrecord_fn, num_parallel_calls=AUTOTUNE)
-    .map(parse_data, num_parallel_calls=AUTOTUNE)
-    .batch(configs.batch_size)
-    .prefetch(AUTOTUNE)
+model.compile(
+    tf.keras.optimizers.Adam(cosine_decay_scheduler),
+    "binary_crossentropy",
+    metrics=["acc"]
 )
 
-# Model
-def conv1d_lstm_block(inputs, filters):
-    vector = tf.keras.layers.ConvLSTM1D(filters=32, kernel_size=8)(inputs)
-    for f in filters:
-        vector = tf.keras.layers.Conv1D(filters=f, kernel_size=8)(vector)
-        vector = tf.keras.layers.MaxPooling1D()(vector)
-    vector = tf.keras.layers.Dropout(0.3)(vector)
-    return vector
-
-
-LIP = [
-    61,
-    185,
-    40,
-    39,
-    37,
-    0,
-    267,
-    269,
-    270,
-    409,
-    291,
-    146,
-    91,
-    181,
-    84,
-    17,
-    314,
-    405,
-    321,
-    375,
-    78,
-    191,
-    80,
-    81,
-    82,
-    13,
-    312,
-    311,
-    310,
-    415,
-    95,
-    88,
-    178,
-    87,
-    14,
-    317,
-    402,
-    318,
-    324,
-    308,
-]
-
-
-def get_model():
-    inputs = tf.keras.Input((configs.num_frames, 543, 3), dtype=tf.float32)
-
-    # Features
-    lip_inputs = tf.gather(inputs, indices=LIP, axis=2)
-    left_hand_inputs = inputs[:, :, 468:489, :]
-    right_hand_inputs = inputs[:, :, 522:, :]
-
-    lip_vector = conv1d_lstm_block(lip_inputs, [32, 64])
-    left_hand_vector = conv1d_lstm_block(left_hand_inputs, [64])
-    right_hand_vector = conv1d_lstm_block(right_hand_inputs, [64])
-
-    vector = tf.keras.layers.Concatenate(axis=1)(
-        [lip_vector, left_hand_vector, right_hand_vector]
-    )
-    vector = tf.keras.layers.Flatten()(vector)
-    output = tf.keras.layers.Dense(250, activation="softmax")(vector)
-    model = tf.keras.Model(inputs=inputs, outputs=output)
-
-    return model
-
-
-model = get_model()
-
-model.compile("adam", "binary_crossentropy", metrics=["acc"])
 
 callbacks = []
 

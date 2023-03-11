@@ -11,9 +11,8 @@ from tensorflow.keras import models
 import wandb
 from wandb.keras import WandbMetricsLogger
 
+from asl.utils import id_generator, natural_keys
 
-def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
-    return ''.join(random.choice(chars) for _ in range(size))
 
 random_id = id_generator(size=8)
 print('Experiment Id: ', random_id)
@@ -24,24 +23,18 @@ configs = Namespace(
     batch_size = 128,
     experiment_id = random_id,
     epochs = 20,
+    use_wandb = False,
 )
 
-run = wandb.init(
-    project="kaggle-asl",
-    name=f"baseline-{configs.experiment_id}",
-    config=configs,
-    job_type="train",
-)
-
-def natural_keys(text):
-    ""
-    def atoi(text):
-        return int(text) if text.isdigit() else text
-    
-    return [atoi(c) for c in re.split(r'(\d+)', text)]
+if configs.use_wandb:
+    run = wandb.init(
+        project="kaggle-asl",
+        name=f"baseline-{configs.experiment_id}",
+        config=configs,
+        job_type="train",
+    )
 
 # Data
-
 data_path = "data/tfrecords"
 tfrecords = sorted(glob(f"{data_path}/*.tfrec"), key=natural_keys)
 
@@ -177,6 +170,8 @@ model.compile(
 )
 
 
+callbacks = []
+
 earlystopper = tf.keras.callbacks.EarlyStopping(
     monitor="val_loss",
     patience=3,
@@ -184,11 +179,11 @@ earlystopper = tf.keras.callbacks.EarlyStopping(
     mode="auto",
     restore_best_weights=True,
 )
+callbacks.append(earlystopper)
 
-callbacks = [
-    earlystopper,
-    WandbMetricsLogger(log_freq=2)
-]
+if configs.use_wandb:
+    wandbmetricslogger = WandbMetricsLogger(log_freq=2)
+    callbacks.append(wandbmetricslogger)
 
 model.fit(
     trainloader,
@@ -201,4 +196,7 @@ model.fit(
 model.save(f"models/baseline-{configs.experiment_id}")
 
 eval_loss, eval_acc = model.evaluate(validloader)
-wandb.log({"eval_loss": eval_loss, "eval_acc": eval_acc})
+print(f"Eval Loss: {eval_loss} | Eval Accuracy: {eval_acc}")
+
+if configs.use_wandb:
+    wandb.log({"eval_loss": eval_loss, "eval_acc": eval_acc})

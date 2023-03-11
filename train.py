@@ -27,6 +27,8 @@ configs = Namespace(
     epochs=20,
     use_wandb=True,
     resizing_interpolation="nearest",
+    learning_rate=1e-3,
+    num_steps=1.0,
 )
 
 if configs.use_wandb:
@@ -49,7 +51,7 @@ validloader = dataloader.get_dataloader(valid_tfrecords, dataloader="valid")
 
 
 tf.keras.backend.clear_session()
-model = SeparateConvLSTMModel(configs).get_model()
+model = SeparateConvLSTMModel(configs, use_attention=True).get_model()
 model.summary()
 
 total_steps = 585*configs.epochs

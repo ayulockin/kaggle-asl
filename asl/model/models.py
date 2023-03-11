@@ -31,7 +31,9 @@ class SeparateConvLSTMModel:
         )
 
         if self.use_attention:
+            vector = tf.keras.layers.LayerNormalization()(vector)
             vector = tf.keras.layers.MultiHeadAttention(num_heads=3, key_dim=32)(vector, vector)
+            vector = tf.keras.layers.LayerNormalization()(vector)
 
         vector = tf.keras.layers.Flatten()(vector)
         output = tf.keras.layers.Dense(250, activation="softmax")(vector)

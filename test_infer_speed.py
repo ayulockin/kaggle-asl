@@ -21,7 +21,7 @@ import tflite_runtime.interpreter as tflite
 
 root_dir = "data/"
 data_path = root_dir + "train.csv"
-model_path = "models/run_bi6im2uq_model:v17-IOE4W2QE"
+model_path = "models/run_78ghk6f1_model:v26-Q1Y7VBLR"
 
 
 def get_random_id(model_path):
@@ -53,7 +53,7 @@ def load_relevant_data_subset(pq_path):
 
 
 configs = Namespace(
-    num_frames = 16,
+    num_frames = 32,
     resizing_interpolation="nearest",
 )
 

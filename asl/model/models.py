@@ -10,8 +10,9 @@ LIP = [
 
 
 class SeparateConvLSTMModel:
-    def __init__(self, configs):
+    def __init__(self, configs, use_attention=False):
         self.configs = configs
+        self.use_attention = use_attention
 
     def get_model(self):
         inputs = tf.keras.Input((self.configs.num_frames, 543, 3), dtype=tf.float32)
@@ -28,18 +29,22 @@ class SeparateConvLSTMModel:
         vector = tf.keras.layers.Concatenate(axis=1)(
             [lip_vector, left_hand_vector, right_hand_vector]
         )
+
+        if self.use_attention:
+            vector = tf.keras.layers.MultiHeadAttention(num_heads=3, key_dim=32)(vector, vector)
+
         vector = tf.keras.layers.Flatten()(vector)
         output = tf.keras.layers.Dense(250, activation="softmax")(vector)
         model = tf.keras.Model(inputs=inputs, outputs=output)
 
         return model
-    
+
     def _conv1d_lstm_block(self, inputs, filters):
-        vector = tf.keras.layers.ConvLSTM1D(filters=32, kernel_size=8)(inputs)
+        x = tf.keras.layers.ConvLSTM1D(filters=32, kernel_size=8)(inputs)
         for f in filters:
-            vector = tf.keras.layers.Conv1D(filters=f, kernel_size=8)(vector)
-            vector = tf.keras.layers.BatchNormalization()(vector)
-            vector = tf.keras.activations.relu(vector)
-            vector = tf.keras.layers.MaxPooling1D()(vector)
-        vector = tf.keras.layers.Dropout(0.3)(vector)
-        return vector
+            x = tf.keras.layers.Conv1D(filters=f, kernel_size=8)(x)
+            x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.activations.relu(x)
+            x = tf.keras.layers.MaxPooling1D()(x)
+        x = tf.keras.layers.Dropout(0.3)(x)
+        return x

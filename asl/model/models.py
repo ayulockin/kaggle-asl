@@ -8,6 +8,26 @@ LIP = [
     87, 14, 317, 402, 318, 324, 308,
 ]
 
+RIGHT_EYE = [
+    246, 161, 160, 159, 158, 157, 173,
+    33, 7, 163, 144, 145, 153, 154, 155, 133,
+    247, 30, 29, 27, 28, 56, 190,
+    130, 25, 110, 24, 23, 22, 26, 112, 243,
+    113, 225, 224, 223, 222, 221, 189,
+    226, 31, 228, 229, 230, 231, 232, 233, 244,
+    143, 111, 117, 118, 119, 120, 121, 128, 245,
+]
+
+LEFT_EYE = [
+    466, 387, 386, 385, 384, 398,
+    263, 249, 390, 373, 374, 380, 381, 382, 362,
+    467, 260, 259, 257, 258, 286, 414,
+    359, 255, 339, 254, 253, 252, 256, 341, 463,
+    342, 445, 444, 443, 442, 441, 413,
+    446, 261, 448, 449, 450, 451, 452, 453, 464,
+    372, 340, 346, 347, 348, 349, 350, 357, 465,
+]
+
 
 class SeparateConvLSTMModel:
     def __init__(self, configs, use_attention=False):
@@ -21,13 +41,17 @@ class SeparateConvLSTMModel:
         lip_inputs = tf.gather(inputs, indices=LIP, axis=2)
         left_hand_inputs = inputs[:, :, 468:489, :]
         right_hand_inputs = inputs[:, :, 522:, :]
+        right_eye_inputs = tf.gather(inputs, indices=RIGHT_EYE, axis=2)
+        left_eye_inputs = tf.gather(inputs, indices=LEFT_EYE, axis=2)
 
         lip_vector = self._conv1d_lstm_block(lip_inputs, [32, 64])
         left_hand_vector = self._conv1d_lstm_block(left_hand_inputs, [64])
         right_hand_vector = self._conv1d_lstm_block(right_hand_inputs, [64])
+        right_eye_vector = self._conv1d_lstm_block(right_eye_inputs, [32, 64])
+        left_eye_vector = self._conv1d_lstm_block(left_eye_inputs, [32, 64])
 
         vector = tf.keras.layers.Concatenate(axis=1)(
-            [lip_vector, left_hand_vector, right_hand_vector]
+            [lip_vector, left_hand_vector, right_hand_vector, right_eye_vector, left_eye_vector]
         )
 
         if self.use_attention:

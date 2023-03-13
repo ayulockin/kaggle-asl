@@ -51,7 +51,7 @@ validloader = dataloader.get_dataloader(valid_tfrecords, dataloader="valid")
 
 
 tf.keras.backend.clear_session()
-model = SeparateConvLSTMModel(configs, use_attention=True).get_model()
+model = SeparateConvLSTMModel(configs).get_model()
 model.summary()
 
 total_steps = 585*configs.epochs

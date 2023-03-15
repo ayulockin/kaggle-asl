@@ -133,6 +133,9 @@ models/
 
 # Don't upload data
 data/
+eda/
 
 # W&B
 wandb/
+
+

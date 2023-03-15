@@ -30,9 +30,10 @@ LEFT_EYE = [
 
 
 class SeparateConvLSTMModel:
-    def __init__(self, configs, use_attention=False):
+    def __init__(self, configs, use_attention=False, use_eyes=False):
         self.configs = configs
         self.use_attention = use_attention
+        self.use_eyes = use_eyes
 
     def get_model(self):
         inputs = tf.keras.Input((self.configs.num_frames, 543, 3), dtype=tf.float32)
@@ -47,12 +48,15 @@ class SeparateConvLSTMModel:
         lip_vector = self._conv1d_lstm_block(lip_inputs, [32, 64])
         left_hand_vector = self._conv1d_lstm_block(left_hand_inputs, [64])
         right_hand_vector = self._conv1d_lstm_block(right_hand_inputs, [64])
-        right_eye_vector = self._conv1d_lstm_block(right_eye_inputs, [32, 64])
-        left_eye_vector = self._conv1d_lstm_block(left_eye_inputs, [32, 64])
+        if self.use_eyes:
+            right_eye_vector = self._conv1d_lstm_block(right_eye_inputs, [32, 64])
+            left_eye_vector = self._conv1d_lstm_block(left_eye_inputs, [32, 64])
 
-        vector = tf.keras.layers.Concatenate(axis=1)(
-            [lip_vector, left_hand_vector, right_hand_vector, right_eye_vector, left_eye_vector]
-        )
+        vectors_list = [lip_vector, left_hand_vector, right_hand_vector]
+        if self.use_eyes:
+            vectors_list.extend([right_eye_vector, left_eye_vector])
+
+        vector = tf.keras.layers.Concatenate(axis=1)(vectors_list)
 
         if self.use_attention:
             vector = tf.keras.layers.LayerNormalization()(vector)

@@ -1,0 +1,36 @@
+# name: Upload model saved as W&B artifact as Kaggle Dataset
+# on:
+#   push:
+#     branches:
+#       - 'main'
+
+# jobs:
+#   wandb-kaggle:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v2
+#       - name: Setup Python version
+#         uses: actions/setup-python@v2
+#         with:
+#           python-version: '3.9'
+#       - name: Install the packages
+#         uses: BSFishy/pip-action@v1
+#         with:
+#           packages: wandb kaggle
+
+#       - name: Loging W&B
+#         shell: bash
+#         env:
+#           WANDB_API: ${{ secrets.WANDB_KEY }}
+#         run: wandb login "$WANDB_API"
+
+#       - name: Download and Upload
+#         uses: ayulockin/wandb2kaggle@v1
+#         with:
+#           artifact_name: 'ayut/happywhale/EfficientNetB0'
+#           id: 'ayuraj/happywhale-supervised'
+#           title: 'HappyWhale Supervised Models'
+#           is_public: true
+#           kaggle_username: ${{ secrets.KAGGLE_USERNAME }}
+#           kaggle_key: ${{ secrets.KAGGLE_KEY }}

@@ -1,6 +1,16 @@
 import wandb
+import argparse
 
-api = wandb.Api()
-artifact = api.artifact('ayush-thakur/kaggle-asl/run_km98j22z_model:v18')
-artifact_dir = artifact.download()
-print(artifact_dir)
+def download_model(model_name):
+    api = wandb.Api()
+    artifact = api.artifact(model_name, type='model')
+    artifact_dir = artifact.download()
+    print(artifact_dir)
+
+
+if __name__ == "__main__":
+    args = argparse.ArgumentParser()
+    args.add_argument('--model_path', type=str)
+    config = args.parse_args()
+
+    download_model(config.model_path)

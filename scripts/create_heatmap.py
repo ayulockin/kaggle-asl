@@ -1,6 +1,7 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import re
+import cv2
 import math
 import time
 
@@ -30,8 +31,8 @@ tfrecords_dir = "data/tfrecords_heatmaps"
 LIP = [
     61, 185, 40, 39, 37, 0, 267, 269, 270, 409,
     291, 146, 91, 181, 84, 17, 314, 405, 321, 375,
-    78, 191, 80, 81, 82, 13, 312, 311, 310, 415,
-    95, 88, 178, 87, 14, 317, 402, 318, 324, 308,
+    # 78, 191, 80, 81, 82, 13, 312, 311, 310, 415,
+    # 95, 88, 178, 87, 14, 317, 402, 318, 324, 308,
 ]
 
 RIGHT_EYE = [
@@ -85,7 +86,7 @@ tfrecords = glob("data/tfrecords/*.tfrec")
 tfrecords = sorted(tfrecords, key=natural_keys)
 
 
-def parse_sequence(serialized_sequence):
+def parse_sequence_raw(serialized_sequence):
     return tf.io.parse_tensor(
         serialized_sequence,
         out_type=tf.float32,
@@ -105,7 +106,7 @@ def parse_tfrecord_fn(example):
 def parse_data(example):
     # Parse Frames
     n_frames = example["n_frames"]
-    frames = tf.reshape(parse_sequence(example["frames"]), shape=(n_frames, 543, 3))
+    frames = tf.reshape(parse_sequence_raw(example["frames"]), shape=(n_frames, 543, 3))
 
     # Parse Labels
     label = example["label"]
@@ -190,6 +191,31 @@ def get_3d_heatmap(ret, human_kps, num_frames):
     return ret
 
 
+def vis_heatmaps(heatmaps, channel=-1, ratio=8):
+    # if channel is -1, draw all keypoints / limbs on the same map
+    import matplotlib.cm as cm
+    heatmaps = [x.transpose(1, 2, 0) for x in heatmaps]
+    h, w, _ = heatmaps[0].shape
+    newh, neww = int(h * ratio), int(w * ratio)
+
+    if channel == -1:
+        heatmaps = [np.max(x, axis=-1) for x in heatmaps]
+    cmap = cm.viridis
+    heatmaps = [(cmap(x)[..., :3] * 255).astype(np.uint8) for x in heatmaps]
+    heatmaps = [cv2.resize(x, (neww, newh)) for x in heatmaps]
+    return heatmaps
+
+
+def draw_human_nodes(heatmap):
+    keypoint_humans = []
+
+    for arr in heatmap:
+        keypoint_mapvis = vis_heatmaps(np.expand_dims(arr, axis=0), ratio=1)
+        keypoint_humans.append(keypoint_mapvis[0])
+
+    return np.array(keypoint_humans)
+
+
 def float_feature(value):
     """Returns a float_list from a float / double."""
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
@@ -250,12 +276,14 @@ def write_tfrecord(tfrecords):
 
                 heatmap = get_3d_heatmap(ret, humans, num_frames)
 
+                keypoint_humans = draw_human_nodes(heatmap)
+
                 example = create_example(
                     num_frames,
-                    heatmap,
+                    keypoint_humans,
                     label.numpy()
                 )
-                
+
                 writer.write(example.SerializeToString())
 
 

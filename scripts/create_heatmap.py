@@ -26,7 +26,9 @@ AUTOTUNE = tf.data.AUTOTUNE
 NUM_JOINTS = 107
 IMG_H = 56
 IMG_W = 56
-tfrecords_dir = "data/tfrecords_heatmaps"
+tfrecords_dir = "data/tfrecord_heatmaps"
+os.makedirs(tfrecords_dir, exist_ok=True)
+
 
 LIP = [
     61, 185, 40, 39, 37, 0, 267, 269, 270, 409,
@@ -270,6 +272,14 @@ def write_tfrecord(tfrecords):
                 lhs = tf.gather(data, LEFT_HAND, axis=1).numpy()
 
                 humans = np.concatenate([faces, poses, rhs, lhs], axis=1)
+                num_frames = humans.shape[0]
+
+                if num_frames < 32:
+                    humans = tf.image.resize(humans, (32, humans.shape[1]), method="nearest").numpy()
+                else:
+                    # uniform sampling
+                    indices = sorted(np.random.choice(num_frames, 32, replace=False))
+                    humans = humans[indices]
 
                 num_frames = humans.shape[0]
                 ret = np.zeros([num_frames, NUM_JOINTS, IMG_H, IMG_W], dtype=np.float32)

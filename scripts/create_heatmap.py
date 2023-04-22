@@ -20,12 +20,11 @@ from tensorflow.keras import models
 tf.config.set_visible_devices([], 'GPU')
 
 
-NUM_JOINTS = 543
 AUTOTUNE = tf.data.AUTOTUNE
 
-NUM_JOINTS = 107
-IMG_H = 56
-IMG_W = 56
+NUM_JOINTS = 61
+IMG_H = 32
+IMG_W = 32
 tfrecords_dir = "data/tfrecord_heatmaps"
 os.makedirs(tfrecords_dir, exist_ok=True)
 
@@ -69,11 +68,17 @@ RIGHT_HAND = [
     538, 539, 540, 541, 542
 ]
 
+# POSE = [
+#     489, 490, 491, 492, 493, 494, 495, 496, 497,
+#     498, 499, 500, 501, 502, 503, 504, 505, 506,
+#     507, 508, 509, 510, 511, 512, 513, 514, 515,
+#     516, 517, 518, 519, 520, 521
+# ]
+
 POSE = [
     489, 490, 491, 492, 493, 494, 495, 496, 497,
-    498, 499, 500, 501, 502, 503, 504, 505, 506,
-    507, 508, 509, 510, 511, 512, 513, 514, 515,
-    516, 517, 518, 519, 520, 521
+    498, 499, 500, 501, 502, 503, 504, 505, 512,
+    513, 514, 515, 516, 517, 518, 519, 520, 521
 ]
 
 
@@ -141,7 +146,7 @@ def generate_a_heatmap(arr, centers, max_values):
         np.ndarray: The generated pseudo heatmap.
     """
 
-    sigma = 0.1
+    sigma = 0.9
     img_h, img_w = arr.shape
 
     for center, max_value in zip(centers, max_values):
@@ -151,10 +156,10 @@ def generate_a_heatmap(arr, centers, max_values):
             mu_x = min(math.floor(mu_x * img_w), img_w - 1)
             mu_y = min(math.floor(mu_y * img_h), img_h - 1)
 
-            st_x = max(int(mu_x - 0.5 * sigma), 0)
-            ed_x = min(int(mu_x + 0.5 * sigma) + 1, img_w)
-            st_y = max(int(mu_y - 0.5 * sigma), 0)
-            ed_y = min(int(mu_y + 0.5 * sigma) + 1, img_h)
+            st_x = max(int(mu_x - 2 * sigma), 0)
+            ed_x = min(int(mu_x + 2 * sigma) + 1, img_w)
+            st_y = max(int(mu_y - 2 * sigma), 0)
+            ed_y = min(int(mu_y + 2 * sigma) + 1, img_h)
             x = np.arange(st_x, ed_x, 1, np.float32)
             y = np.arange(st_y, ed_y, 1, np.float32)
 
@@ -241,7 +246,7 @@ def serialize_sequence(sequence):
 def parse_sequence(serialized_sequence):
     return tf.io.parse_tensor(
         serialized_sequence,
-        out_type=tf.float32,
+        out_type=tf.float16,
     )
 
 
@@ -266,31 +271,31 @@ def write_tfrecord(tfrecords):
         ) as writer:
 
             for idx, (num_frames, data, label) in enumerate(tqdm(dataloader, desc=f"Reading TFRecord idx: {split}")):
-                faces = tf.gather(data, LIP, axis=1).numpy()
+                # faces = tf.gather(data, LIP, axis=1).numpy()
                 poses = tf.gather(data, POSE, axis=1).numpy()[:,:-8]
                 rhs = tf.gather(data, RIGHT_HAND, axis=1).numpy()
                 lhs = tf.gather(data, LEFT_HAND, axis=1).numpy()
 
-                humans = np.concatenate([faces, poses, rhs, lhs], axis=1)
+                humans = np.concatenate([poses, rhs, lhs], axis=1)
                 num_frames = humans.shape[0]
 
-                if num_frames < 32:
-                    humans = tf.image.resize(humans, (32, humans.shape[1]), method="nearest").numpy()
+                if num_frames < 28:
+                    humans = tf.image.resize(humans, (28, humans.shape[1]), method="nearest").numpy()
                 else:
                     # uniform sampling
-                    indices = sorted(np.random.choice(num_frames, 32, replace=False))
+                    indices = sorted(np.random.choice(num_frames, 28, replace=False))
                     humans = humans[indices]
 
                 num_frames = humans.shape[0]
-                ret = np.zeros([num_frames, NUM_JOINTS, IMG_H, IMG_W], dtype=np.float32)
+                ret = np.zeros([num_frames, NUM_JOINTS, IMG_H, IMG_W], dtype=np.float16)
 
                 heatmap = get_3d_heatmap(ret, humans, num_frames)
 
-                keypoint_humans = draw_human_nodes(heatmap)
+                # keypoint_humans = draw_human_nodes(heatmap)
 
                 example = create_example(
                     num_frames,
-                    keypoint_humans,
+                    heatmap,
                     label.numpy()
                 )
 
@@ -309,12 +314,12 @@ if __name__ == '__main__':
     chunk_length = int(max(1, np.ceil(len(tfrecords) / cpus)))
     chunks = [tfrecords[x:x+chunk_length] for x in range(0, len(tfrecords), chunk_length)]
 
-    for i in range(cpus):
+    for i in range(len(chunks)):
         p = multiprocessing.Process(target=multiprocessing_func, args=(chunks[i],))
         processes.append(p)
         p.start()
-        
+
     for process in processes:
         process.join()
-        
+
     print('That took {} seconds'.format(time.time() - starttime))

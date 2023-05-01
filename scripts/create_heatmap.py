@@ -305,7 +305,7 @@ def write_tfrecord(tfrecords):
 def multiprocessing_func(chunks):
     write_tfrecord(chunks)
 
-    
+
 if __name__ == '__main__':
     starttime = time.time()
     
